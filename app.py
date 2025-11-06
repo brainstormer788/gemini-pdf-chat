@@ -1,8 +1,8 @@
 import streamlit as st
 import os
 from llama_index.core import SimpleDirectoryReader, Settings, VectorStoreIndex
-from llama_index.embeddings.gemini import GeminiEmbedding
-from llama_index.llms.gemini import Gemini
+from llama_index.llms.google_genai import GoogleLLM
+from llama_index.embeddings.google_genai import GoogleTextEmbedding
 from dotenv import load_dotenv
 import tempfile
 import base64
@@ -10,20 +10,25 @@ import base64
 load_dotenv()
 
 def initialize_chat_engine(documents):
-    llm = Gemini(
-        model="models/gemini-2.0-flash",
+    """Initialize RAG + Memory Chat Engine using NEW Google GenAI SDK."""
+
+    llm = GoogleLLM(
+        model="gemini-2.0-flash",      # ✅ New Google model naming (no "models/")
         api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.4,
     )
 
-    embed_model = GeminiEmbedding(
-        model_name="models/text-embedding-004",
+    embed_model = GoogleTextEmbedding(
+        model_name="text-embedding-004",   # ✅ New embedding name
         api_key=os.getenv("GEMINI_API_KEY"),
     )
 
     Settings.llm = llm
     Settings.embed_model = embed_model
-    Settings.system_prompt = "You are a helpful assistant. Answer strictly based on the PDF."
+    Settings.system_prompt = (
+        "You are a helpful assistant. Respond ONLY using information from the uploaded PDF. "
+        "If the PDF does not contain the answer, say 'The PDF does not contain this information.'"
+    )
 
     index = VectorStoreIndex.from_documents(documents)
 
@@ -51,7 +56,6 @@ def main():
     if "chat_engine" not in st.session_state:
         st.session_state.chat_engine = None
 
-    # ✅ Sidebar (correct indentation)
     with st.sidebar:
         st.subheader("Upload PDF")
         pdf_file = st.file_uploader("Choose a PDF", type="pdf")
@@ -61,37 +65,35 @@ def main():
                 st.session_state.current_pdf_name = pdf_file.name
 
                 temp_dir = tempfile.mkdtemp()
-                file_path = os.path.join(temp_dir, pdf_file.name)
-
-                with open(file_path, "wb") as f:
+                path = os.path.join(temp_dir, pdf_file.name)
+                with open(path, "wb") as f:
                     f.write(pdf_file.getbuffer())
 
                 docs = SimpleDirectoryReader(temp_dir).load_data()
 
                 st.session_state.chat_engine = initialize_chat_engine(docs)
                 display_pdf_preview(pdf_file)
-                st.success("✅ PDF Loaded Successfully! Start chatting below ↓")
+                st.success("✅ PDF Loaded. Start chatting below ↓")
 
     # Display chat history
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
 
     # Chat input
-    user_input = st.chat_input("Ask something about your PDF...")
-
-    if user_input:
+    prompt = st.chat_input("Ask your PDF something...")
+    if prompt:
         if st.session_state.chat_engine is None:
             st.error("📄 Please upload a PDF first.")
             return
 
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.markdown(user_input)
+            st.markdown(prompt)
 
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                reply = st.session_state.chat_engine.chat(user_input).response
+                reply = st.session_state.chat_engine.chat(prompt).response
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.markdown(reply)
 
