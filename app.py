@@ -12,10 +12,10 @@ load_dotenv()
 
 
 def initialize_chat_engine(documents):
-    """Create RAG + Memory chat engine."""
-    
+    """Create RAG + memory chat engine."""
+
     llm = Gemini(
-        model="models/gemini-2.0-flash",   # ✅ Works with new Gemini API Keys
+        model="models/gemini-2.0-flash",
         api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.4,
     )
@@ -28,8 +28,8 @@ def initialize_chat_engine(documents):
     Settings.llm = llm
     Settings.embed_model = embed
     Settings.system_prompt = (
-        "You are a helpful assistant. Answer ONLY using information inside the uploaded PDF. "
-        "If the PDF does not contain the answer, say 'The PDF does not contain this information.'"
+        "You are a helpful assistant. Answer strictly using the uploaded PDF. "
+        "If the PDF does not contain the answer, reply: 'The PDF does not contain this information.'"
     )
 
     index = VectorStoreIndex.from_documents(documents)
@@ -41,12 +41,11 @@ def initialize_chat_engine(documents):
 
 
 def display_pdf_from_bytes(pdf_bytes):
-    """Preview PDF stored in session."""
-    st.sidebar.subheader("📄 PDF Preview")
     encoded = base64.b64encode(pdf_bytes).decode("utf-8")
+    st.sidebar.subheader("📄 PDF Preview")
     st.sidebar.markdown(
         f'<iframe src="data:application/pdf;base64,{encoded}" width="100%" height="450"></iframe>',
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
@@ -54,43 +53,57 @@ def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", layout="wide")
     st.title("📚 Gemini PDF Chatbot (with Memory)")
 
+    # ----- SESSION STATE -----
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "pdf_bytes" not in st.session_state:
+        st.session_state.pdf_bytes = None
+        st.session_state.pdf_name = None
     if "chat_engine" not in st.session_state:
         st.session_state.chat_engine = None
 
-    # -------------------- SIDEBAR --------------------
+    # ✅ If PDF already loaded, rebuild chat engine after rerun
+    if st.session_state.pdf_bytes is not None and st.session_state.chat_engine is None:
+        temp_dir = tempfile.mkdtemp()
+        path = os.path.join(temp_dir, st.session_state.pdf_name)
+        with open(path, "wb") as f:
+            f.write(st.session_state.pdf_bytes)
+        documents = SimpleDirectoryReader(temp_dir).load_data()
+        st.session_state.chat_engine = initialize_chat_engine(documents)
+
+    # ----- SIDEBAR -----
     with st.sidebar:
         st.subheader("Upload PDF")
         uploaded_pdf = st.file_uploader("Choose a PDF", type="pdf")
 
         if uploaded_pdf is not None:
-            # Run only first upload, not every rerun
-            if "pdf_bytes" not in st.session_state or uploaded_pdf.name != st.session_state.get("pdf_name"):
+            # Load new PDF only once
+            if uploaded_pdf.name != st.session_state.pdf_name:
                 st.session_state.pdf_name = uploaded_pdf.name
                 st.session_state.pdf_bytes = uploaded_pdf.getvalue()
 
                 temp_dir = tempfile.mkdtemp()
-                file_path = os.path.join(temp_dir, uploaded_pdf.name)
-                with open(file_path, "wb") as f:
+                path = os.path.join(temp_dir, uploaded_pdf.name)
+                with open(path, "wb") as f:
                     f.write(st.session_state.pdf_bytes)
 
-                docs = SimpleDirectoryReader(temp_dir).load_data()
-                st.session_state.chat_engine = initialize_chat_engine(docs)
-                st.session_state.messages = []  # reset chat history
+                documents = SimpleDirectoryReader(temp_dir).load_data()
+
+                st.session_state.chat_engine = initialize_chat_engine(documents)
+                st.session_state.messages = []  # Reset chat history
                 st.success("✅ PDF Loaded Successfully!")
                 st.experimental_rerun()
 
-        # If PDF already loaded → show preview
-        if "pdf_bytes" in st.session_state:
+        # Show preview if PDF exists
+        if st.session_state.pdf_bytes:
             display_pdf_from_bytes(st.session_state.pdf_bytes)
 
-    # -------------------- CHAT DISPLAY --------------------
+    # ----- CHAT HISTORY -----
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # -------------------- CHAT INPUT --------------------
+    # ----- CHAT INPUT -----
     user_input = st.chat_input("Ask something about your PDF...")
 
     if user_input:
