@@ -7,7 +7,9 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# ✅ Use REST instead of gRPC (this is what fixes the NotFound error)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"), transport="rest")
 
 # -------- PDF TO TEXT --------
 def load_pdf_text(pdf_bytes):
@@ -30,7 +32,7 @@ def embed_text(text_list):
     embeddings = []
     for t in text_list:
         res = genai.embed_content(
-            model="text-embedding-004",   # ✅ Correct model name
+            model="text-embedding-004",   # ✅ Correct model name format
             content=t
         )
         embeddings.append(res["embedding"])
@@ -68,7 +70,7 @@ def main():
             st.session_state.embeddings = embed_text(st.session_state.chunks)
             st.success("✅ PDF processed successfully! Ask your questions below.")
 
-    # Display history
+    # Show previous chat messages
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -87,24 +89,22 @@ def main():
                 else:
                     context = retrieve_best_chunk(user_query, st.session_state.chunks, st.session_state.embeddings)
 
-                    model = genai.GenerativeModel("gemini-1.5-flash")  # ✅ Correct model
+                    model = genai.GenerativeModel("gemini-1.5-flash")   # ✅ Correct model name
 
                     prompt = f"""
-You are an expert teacher. Answer ONLY using the PDF content.
+Answer ONLY using the PDF content below:
 
-PDF EXCERPT:
+PDF CONTENT:
 {context}
 
 QUESTION:
 {user_query}
 
-Write a highly structured, clear explanation. Include:
-- bullet points
-- real life examples
-- analogies
-- simple language
+Explain clearly, deeply, and include real-life examples where possible.
 """
-                    reply = model.generate_content(prompt).text
+
+                    # ✅ Corrected API usage (this fixes the crash)
+                    reply = model.generate_content([prompt]).text
 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.markdown(reply)
