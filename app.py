@@ -5,48 +5,40 @@ import tempfile
 import base64
 
 from llama_index.core import SimpleDirectoryReader, Settings, VectorStoreIndex
-from llama_index.llms.google import GoogleLLM
-from llama_index.embeddings.google import GoogleTextEmbedding
+from llama_index.llms.google_genai import GoogleLLM
+from llama_index.embeddings.google_genai import GoogleTextEmbedding
 
 load_dotenv()
 
 
 def initialize_chat_engine(documents):
-    """Initialize vector index + memory chat engine."""
-
-    # LLM (Chat Model)
     llm = GoogleLLM(
-        model="gemini-2.0-flash",  # ✅ correct new Gemini model name
+        model="gemini-2.0-flash",
         api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.4,
     )
 
-    # Embeddings
     embed = GoogleTextEmbedding(
-        model_name="text-embedding-004",  # ✅ correct embedding model
-        api_key=os.getenv("GEMINI_API_KEY"),
+        model_name="text-embedding-004",
+        api_key=os.getenv("GEMINI_API_KEY")
     )
 
-    # Apply globally in LlamaIndex
     Settings.llm = llm
     Settings.embed_model = embed
     Settings.system_prompt = (
         "You are a helpful assistant. Only use information from the PDF. "
-        "If answer is not found in the PDF, say: 'The PDF does not contain this information.'"
+        "If the answer is not in the PDF, say: 'The PDF does not contain this information.'"
     )
 
-    # Build vector index
     index = VectorStoreIndex.from_documents(documents)
 
-    # Create memory-aware chat engine
     return index.as_chat_engine(
         chat_mode="condense_question",
-        similarity_top_k=5,
+        similarity_top_k=5
     )
 
 
 def display_pdf(pdf_file):
-    """Display PDF preview in the sidebar."""
     st.sidebar.subheader("📄 PDF Preview")
     encoded = base64.b64encode(pdf_file.getvalue()).decode("utf-8")
     st.sidebar.markdown(
@@ -56,68 +48,60 @@ def display_pdf(pdf_file):
 
 
 def main():
-    st.set_page_config(page_title="Gemini RAG Chatbot", layout="wide")
+    st.set_page_config(page_title="Gemini PDF Chatbot", layout="wide")
     st.title("📚 Gemini PDF Chatbot (with Memory)")
 
-    # Session State
     if "messages" not in st.session_state:
         st.session_state.messages = []
+
     if "chat_engine" not in st.session_state:
         st.session_state.chat_engine = None
 
-    # Sidebar Upload Section
     with st.sidebar:
         st.subheader("Upload PDF")
-        pdf = st.file_uploader("Choose a PDF", type="pdf")
+        pdf_file = st.file_uploader("Choose a PDF", type="pdf")
 
-        if pdf:
-            if "loaded_pdf_name" not in st.session_state or pdf.name != st.session_state.loaded_pdf_name:
+        if pdf_file:
+            if "loaded_pdf" not in st.session_state or pdf_file.name != st.session_state.loaded_pdf:
+                st.session_state.loaded_pdf = pdf_file.name
 
-                st.session_state.loaded_pdf_name = pdf.name
-
-                # Save to temp folder
-                temp_dir = tempfile.mkdtemp()
-                path = os.path.join(temp_dir, pdf.name)
+                tmp = tempfile.mkdtemp()
+                path = os.path.join(tmp, pdf_file.name)
 
                 with open(path, "wb") as f:
-                    f.write(pdf.getbuffer())
+                    f.write(pdf_file.getbuffer())
 
-                # Load text
-                documents = SimpleDirectoryReader(temp_dir).load_data()
+                documents = SimpleDirectoryReader(tmp).load_data()
 
-                # Create chat engine
+                # Initialize chat model memory-enabled RAG
                 st.session_state.chat_engine = initialize_chat_engine(documents)
 
-                # Show preview
-                display_pdf(pdf)
+                display_pdf(pdf_file)
+                st.success("✅ PDF Loaded — Ask anything below!")
+                st.experimental_rerun()
 
-                st.success("✅ PDF Loaded Successfully! Ask questions below 👇")
-                st.experimental_rerun()  # ✅ ensures engine persists
-
-    # Display chat history
+    # Display past messages
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
     # Chat box
-    prompt = st.chat_input("Ask something about your PDF...")
+    user_input = st.chat_input("Ask your PDF a question...")
 
-    if prompt:
+    if user_input:
         if st.session_state.chat_engine is None:
             st.error("⚠️ Please upload a PDF first.")
             return
 
-        # Store and show user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            st.markdown(user_input)
 
-        # Generate response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                reply = st.session_state.chat_engine.chat(prompt).response
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-                st.markdown(reply)
+                response = st.session_state.chat_engine.chat(user_input).response
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.markdown(response)
 
 
 if __name__ == "__main__":
