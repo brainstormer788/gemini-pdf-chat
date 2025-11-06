@@ -46,7 +46,6 @@ def display_pdf_preview(pdf_file):
         unsafe_allow_html=True
     )
 
-
 def main():
     st.set_page_config(page_title="Gemini RAG Chat", layout="wide")
     st.title("📚 Gemini PDF Chatbot with Memory")
@@ -58,26 +57,26 @@ def main():
         st.session_state.chat_engine = None
 
     with st.sidebar:
-    st.subheader("Upload PDF")
-    pdf_file = st.file_uploader("Choose a PDF", type="pdf")
+        st.subheader("Upload PDF")
+        pdf_file = st.file_uploader("Choose a PDF", type="pdf")
 
-    if pdf_file:
-        if "current_pdf_name" not in st.session_state or pdf_file.name != st.session_state.current_pdf_name:
-            st.session_state.current_pdf_name = pdf_file.name
-            st.session_state.current_pdf = pdf_file
+        if pdf_file:
+            if "current_pdf_name" not in st.session_state or pdf_file.name != st.session_state.current_pdf_name:
+                st.session_state.current_pdf_name = pdf_file.name
+                st.session_state.current_pdf = pdf_file
 
-            temp_dir = tempfile.mkdtemp()
-            file_path = os.path.join(temp_dir, pdf_file.name)
-            with open(file_path, "wb") as f:
-                f.write(pdf_file.getbuffer())
+                temp_dir = tempfile.mkdtemp()
+                file_path = os.path.join(temp_dir, pdf_file.name)
+                with open(file_path, "wb") as f:
+                    f.write(pdf_file.getbuffer())
 
-            docs = SimpleDirectoryReader(temp_dir).load_data()
+                docs = SimpleDirectoryReader(temp_dir).load_data()
 
-            st.session_state.chat_engine = initialize_chat_engine(docs)   # ✅ Initialize first
-            st.session_state.docs_loaded = True                           # ✅ Then mark loaded
+                st.session_state.chat_engine = initialize_chat_engine(docs)   # ✅ Initialize first
+                st.session_state.docs_loaded = True                           # ✅ Mark loaded
 
-            display_pdf_preview(pdf_file)
-            st.success("✅ PDF Loaded & Memory Chat Ready!")
+                display_pdf_preview(pdf_file)
+                st.success("✅ PDF Loaded & Memory Chat Ready!")
 
     # Display chat history
     for msg in st.session_state.messages:
