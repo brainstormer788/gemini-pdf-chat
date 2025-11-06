@@ -13,13 +13,13 @@ load_dotenv()
 
 def initialize_chat_engine(documents, embedding_model, generative_model):
     llm = Gemini(
-        model=generative_model,
+        model=f"models/{generative_model}",  
         api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.4,
     )
 
     embed_model = GeminiEmbedding(
-        model_name=embedding_model,
+        model_name="models/text-embedding-004", 
         api_key=os.getenv("GEMINI_API_KEY"),
     )
 
@@ -67,11 +67,12 @@ def main():
                 docs = SimpleDirectoryReader(temp_dir).load_data()
                 st.session_state.docs_loaded = True
                 st.session_state.documents = docs
-                st.session_state.chat_engine = initialize_chat_engine(
+               st.session_state.chat_engine = initialize_chat_engine(
                     docs,
-                    "models/embedding-001",
+                    "models/text-embedding-004",
                     "gemini-1.5-flash"
                 )
+
 
                 display_pdf_preview(pdf_file)
                 st.success("✅ PDF Loaded & Memory Chat Ready!")
