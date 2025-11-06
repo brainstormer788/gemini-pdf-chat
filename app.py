@@ -67,12 +67,12 @@ def main():
                 docs = SimpleDirectoryReader(temp_dir).load_data()
                 st.session_state.docs_loaded = True
                 st.session_state.documents = docs
-               st.session_state.chat_engine = initialize_chat_engine(
+
+                st.session_state.chat_engine = initialize_chat_engine(
                     docs,
                     "models/text-embedding-004",
                     "gemini-1.5-flash"
                 )
-
 
                 display_pdf_preview(pdf_file)
                 st.success("✅ PDF Loaded & Memory Chat Ready!")
