@@ -8,17 +8,14 @@ from llama_index.core import SimpleDirectoryReader, Settings, VectorStoreIndex
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
 
-
 load_dotenv()
 
 
 # ---------------------- RAG ENGINE SETUP ----------------------
 def initialize_chat_engine(documents):
 
-    # LLM - You can switch between flash/pro:
-    # "models/gemini-2.0-flash" (fast) or "models/gemini-2.0-pro" (deep answers)
     llm = Gemini(
-        model="models/gemini-2.0-pro",
+        model="models/gemini-1.5-pro",     # ✅ HIGH-QUALITY + AVAILABLE
         api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.5,
     )
@@ -31,40 +28,36 @@ def initialize_chat_engine(documents):
     Settings.llm = llm
     Settings.embed_model = embed
 
-    # ✅ UNIVERSAL INTELLIGENT EXPLANATION PROMPT (Works for ALL Subjects)
+    # ✅ UNIVERSAL HIGH-QUALITY EXPLANATION PROMPT
     Settings.system_prompt = """
 You are an adaptive, high-level academic explanation assistant.
 You ALWAYS answer strictly using the uploaded PDF. Do not invent information.
 
 Your goals:
-- Understand the subject type from the PDF (engineering, law, medicine, business, science, humanities).
-- Adjust explanation depth accordingly.
-- Teach concepts clearly and deeply.
-- Make the user feel confident enough to explain the concept to someone else.
+- Detect the subject and difficulty level automatically.
+- Teach concepts clearly, deeply, and logically.
+- Make the user understand, not just memorize.
 
 When answering:
-1. Start with a short overview.
-2. Break concepts into clear sections with headings.
-3. Explain step-by-step in simple language.
-4. Then go deeper for understanding.
-5. ALWAYS provide real-world examples, analogies, or case applications.
-6. Use bullet points, numbered lists, tables, and structured formatting.
-7. If asked for full unit/chapter explanation → Summarize first → Then expand topic by topic.
+1. Start with a **concise overview** of the requested topic.
+2. Then **break the explanation into structured sections** with headings.
+3. Explain in **simple language first**, then add **technical depth**.
+4. ALWAYS provide:
+   - Real-world examples
+   - Analogies
+   - Industry or everyday applications
+   - Tables / comparisons when helpful
+5. For large topics (e.g., whole units/chapters):
+   - Start with summary → key themes → detailed topic-wise breakdown → final revision notes.
 
-If the requested answer is NOT in the PDF, say:
+If the answer is NOT in the PDF, reply:
 "The PDF does not contain this information."
-
-Your tone:
-- Clear
-- Supportive
-- Detailed
-- Teacher-like
 """
 
     index = VectorStoreIndex.from_documents(documents)
 
     return index.as_chat_engine(
-        chat_mode="condense_question",   # enables memory-based conversation
+        chat_mode="condense_question",   # ✅ Enables memory across conversation
         similarity_top_k=5
     )
 
@@ -75,7 +68,7 @@ def display_pdf_from_bytes(pdf_bytes):
     st.sidebar.subheader("📄 PDF Preview")
     st.sidebar.markdown(
         f'<iframe src="data:application/pdf;base64,{encoded}" width="100%" height="450"></iframe>',
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
 
@@ -84,7 +77,7 @@ def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", layout="wide")
     st.title("📚 Gemini PDF Chatbot (with Memory & Deep Explanations)")
 
-    # Session State
+    # Session State Setup
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "pdf_bytes" not in st.session_state:
@@ -93,16 +86,16 @@ def main():
     if "chat_engine" not in st.session_state:
         st.session_state.chat_engine = None
 
-    # ✅ Rebuild engine after rerun if PDF already loaded
+    # ✅ Rebuild chat engine after rerun if PDF already loaded
     if st.session_state.pdf_bytes is not None and st.session_state.chat_engine is None:
         temp_dir = tempfile.mkdtemp()
-        path = os.path.join(temp_dir, st.session_state.pdf_name)
-        with open(path, "wb") as f:
+        file_path = os.path.join(temp_dir, st.session_state.pdf_name)
+        with open(file_path, "wb") as f:
             f.write(st.session_state.pdf_bytes)
-        documents = SimpleDirectoryReader(temp_dir).load_data()
-        st.session_state.chat_engine = initialize_chat_engine(documents)
+        docs = SimpleDirectoryReader(temp_dir).load_data()
+        st.session_state.chat_engine = initialize_chat_engine(docs)
 
-    # Sidebar Upload
+    # Sidebar: Upload Section
     with st.sidebar:
         st.subheader("Upload PDF")
         uploaded_pdf = st.file_uploader("Choose a PDF", type="pdf")
@@ -113,40 +106,40 @@ def main():
                 st.session_state.pdf_bytes = uploaded_pdf.getvalue()
 
                 temp_dir = tempfile.mkdtemp()
-                path = os.path.join(temp_dir, uploaded_pdf.name)
-                with open(path, "wb") as f:
+                file_path = os.path.join(temp_dir, uploaded_pdf.name)
+                with open(file_path, "wb") as f:
                     f.write(st.session_state.pdf_bytes)
 
-                documents = SimpleDirectoryReader(temp_dir).load_data()
+                docs = SimpleDirectoryReader(temp_dir).load_data()
 
-                st.session_state.chat_engine = initialize_chat_engine(documents)
-                st.session_state.messages = []  # reset chat history
+                st.session_state.chat_engine = initialize_chat_engine(docs)
+                st.session_state.messages = []   # Reset chat history
                 st.success("✅ PDF Loaded Successfully!")
                 st.experimental_rerun()
 
         if st.session_state.pdf_bytes:
             display_pdf_from_bytes(st.session_state.pdf_bytes)
 
-    # Display chat messages
+    # Chat History Display
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Chat input
-    user_input = st.chat_input("Ask anything about your PDF...")
+    # Chat Input
+    user_msg = st.chat_input("Ask anything about your PDF...")
 
-    if user_input:
+    if user_msg:
         if st.session_state.chat_engine is None:
             st.error("⚠️ Please upload a PDF first.")
             return
 
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        st.session_state.messages.append({"role": "user", "content": user_msg})
         with st.chat_message("user"):
-            st.markdown(user_input)
+            st.markdown(user_msg)
 
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                reply = st.session_state.chat_engine.chat(user_input).response
+                reply = st.session_state.chat_engine.chat(user_msg).response
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.markdown(reply)
 
