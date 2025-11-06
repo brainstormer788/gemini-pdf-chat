@@ -3,6 +3,6 @@ python-dotenv
 PyMuPDF
 llama-index
 llama-index-core
-llama-index-llms-google
-llama-index-embeddings-google
+llama-index-llms-google-genai
+llama-index-embeddings-google-genai
 protobuf==4.25.3
