@@ -58,25 +58,26 @@ def main():
         st.session_state.chat_engine = None
 
     with st.sidebar:
-        st.subheader("Upload PDF")
-        pdf_file = st.file_uploader("Choose a PDF", type="pdf")
+    st.subheader("Upload PDF")
+    pdf_file = st.file_uploader("Choose a PDF", type="pdf")
 
-        if pdf_file:
-            if pdf_file != st.session_state.get("current_pdf", None):
-                st.session_state.current_pdf = pdf_file
+    if pdf_file:
+        if "current_pdf_name" not in st.session_state or pdf_file.name != st.session_state.current_pdf_name:
+            st.session_state.current_pdf_name = pdf_file.name
+            st.session_state.current_pdf = pdf_file
 
-                temp_dir = tempfile.mkdtemp()
-                file_path = os.path.join(temp_dir, pdf_file.name)
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, pdf_file.name)
+            with open(file_path, "wb") as f:
+                f.write(pdf_file.getbuffer())
 
-                with open(file_path, "wb") as f:
-                    f.write(pdf_file.getbuffer())
+            docs = SimpleDirectoryReader(temp_dir).load_data()
 
-                docs = SimpleDirectoryReader(temp_dir).load_data()
+            st.session_state.chat_engine = initialize_chat_engine(docs)   # ✅ Initialize first
+            st.session_state.docs_loaded = True                           # ✅ Then mark loaded
 
-                st.session_state.chat_engine = initialize_chat_engine(docs)
-
-                display_pdf_preview(pdf_file)
-                st.success("✅ PDF Loaded & Chat Memory Ready!")
+            display_pdf_preview(pdf_file)
+            st.success("✅ PDF Loaded & Memory Chat Ready!")
 
     # Display chat history
     for msg in st.session_state.messages:
