@@ -1,8 +1,6 @@
 streamlit
 python-dotenv
 PyMuPDF
-protobuf==4.25.3
-llama-index==0.14.7
-llama-index-core==0.14.7
-llama-index-llms-gemini
-llama-index-embeddings-gemini
+google-generativeai
+numpy
+scikit-learn
