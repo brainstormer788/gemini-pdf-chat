@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
-# ✅ Use REST instead of gRPC (this is what fixes the NotFound error)
+# ✅ Ensure REST transport (prevents NotFound errors)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"), transport="rest")
 
 # -------- PDF TO TEXT --------
@@ -22,34 +22,29 @@ def load_pdf_text(pdf_bytes):
 # -------- TEXT CHUNKING --------
 def chunk_text(text, chunk_size=1200):
     words = text.split()
-    chunks = []
-    for i in range(0, len(words), chunk_size):
-        chunks.append(" ".join(words[i:i + chunk_size]))
-    return chunks
+    return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
 
 # -------- EMBEDDING --------
 def embed_text(text_list):
-    embeddings = []
-    for t in text_list:
-        res = genai.embed_content(
-            model="text-embedding-004",   # ✅ Correct model name format
-            content=t
+    embs = []
+    for text in text_list:
+        r = genai.embed_content(
+            model="text-embedding-004",
+            content=text
         )
-        embeddings.append(res["embedding"])
-    return np.array(embeddings)
+        embs.append(r["embedding"])
+    return np.array(embs)
 
-# -------- RAG SEARCH --------
+# -------- RETRIEVAL --------
 def retrieve_best_chunk(query, chunks, embeddings):
-    query_embedding = genai.embed_content(
-        model="text-embedding-004",       # ✅ Correct model name
+    q = genai.embed_content(
+        model="text-embedding-004",
         content=query
     )["embedding"]
+    sims = cosine_similarity([q], embeddings)[0]
+    return chunks[np.argmax(sims)]
 
-    sims = cosine_similarity([query_embedding], embeddings)[0]
-    best_index = np.argmax(sims)
-    return chunks[best_index]
-
-# -------- MAIN STREAMLIT APP --------
+# -------- MAIN APP --------
 def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", layout="wide")
     st.title("📚 Gemini PDF Chatbot (RAG + Deep Explanations)")
@@ -68,12 +63,12 @@ def main():
             text = load_pdf_text(pdf.getvalue())
             st.session_state.chunks = chunk_text(text)
             st.session_state.embeddings = embed_text(st.session_state.chunks)
-            st.success("✅ PDF processed successfully! Ask your questions below.")
+            st.success("✅ PDF processed successfully. Ask questions below.")
 
-    # Show previous chat messages
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    # display conversation
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
 
     user_query = st.chat_input("Ask something about your PDF...")
 
@@ -87,12 +82,17 @@ def main():
                 if st.session_state.chunks is None:
                     reply = "⚠️ Please upload a PDF first."
                 else:
-                    context = retrieve_best_chunk(user_query, st.session_state.chunks, st.session_state.embeddings)
+                    context = retrieve_best_chunk(
+                        user_query,
+                        st.session_state.chunks,
+                        st.session_state.embeddings
+                    )
 
-                    model = genai.GenerativeModel("gemini-1.5-flash")   # ✅ Correct model name
+                    model = genai.GenerativeModel("gemini-1.5-flash")  # ✅ final stable name
 
-                    prompt = f"""
-Answer ONLY using the PDF content below:
+                    reply = model.generate_content(
+                        f"""
+You are an expert teacher. Answer using ONLY the PDF content below.
 
 PDF CONTENT:
 {context}
@@ -100,11 +100,12 @@ PDF CONTENT:
 QUESTION:
 {user_query}
 
-Explain clearly, deeply, and include real-life examples where possible.
+Write a deep, structured explanation with:
+- Real-world examples
+- Clear bullet points
+- Step-by-step logic
 """
-
-                    # ✅ Corrected API usage (this fixes the crash)
-                    reply = model.generate_content([prompt]).text
+                    ).text
 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.markdown(reply)
