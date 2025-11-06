@@ -13,13 +13,13 @@ load_dotenv()
 
 def initialize_chat_engine(documents, embedding_model, generative_model):
     llm = Gemini(
-        model=f"models/{generative_model}",  
+        model=f"models/{generative_model}",  # now expects "gemini-2.0-flash"
         api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.4,
     )
 
     embed_model = GeminiEmbedding(
-        model_name="models/text-embedding-004", 
+        model_name="models/text-embedding-004",
         api_key=os.getenv("GEMINI_API_KEY"),
     )
 
@@ -71,8 +71,9 @@ def main():
                 st.session_state.chat_engine = initialize_chat_engine(
                     docs,
                     "models/text-embedding-004",
-                    "gemini-1.5-flash"
+                    "gemini-2.0-flash"
                 )
+
 
                 display_pdf_preview(pdf_file)
                 st.success("✅ PDF Loaded & Memory Chat Ready!")
