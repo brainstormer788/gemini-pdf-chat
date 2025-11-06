@@ -1,8 +1,10 @@
 streamlit
-google-generativeai
+
 llama-index
 llama-index-core
-llama-index-llms-gemini
-llama-index-embeddings-gemini
+
 python-dotenv
 PyMuPDF
+llama-index-llms-google-genai
+llama-index-embeddings-google-genai
+
