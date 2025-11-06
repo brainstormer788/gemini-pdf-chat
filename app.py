@@ -9,7 +9,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-
 # -------- PDF TO TEXT --------
 def load_pdf_text(pdf_bytes):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -17,7 +16,6 @@ def load_pdf_text(pdf_bytes):
     for page in doc:
         text += page.get_text("text") + "\n"
     return text.strip()
-
 
 # -------- TEXT CHUNKING --------
 def chunk_text(text, chunk_size=1200):
@@ -27,30 +25,27 @@ def chunk_text(text, chunk_size=1200):
         chunks.append(" ".join(words[i:i + chunk_size]))
     return chunks
 
-
 # -------- EMBEDDING --------
 def embed_text(text_list):
     embeddings = []
     for t in text_list:
         res = genai.embed_content(
-            model="models/text-embedding-004",
+            model="text-embedding-004",   # ✅ Correct model name
             content=t
         )
         embeddings.append(res["embedding"])
     return np.array(embeddings)
 
-
 # -------- RAG SEARCH --------
 def retrieve_best_chunk(query, chunks, embeddings):
     query_embedding = genai.embed_content(
-        model="models/text-embedding-004",
+        model="text-embedding-004",       # ✅ Correct model name
         content=query
     )["embedding"]
 
     sims = cosine_similarity([query_embedding], embeddings)[0]
     best_index = np.argmax(sims)
     return chunks[best_index]
-
 
 # -------- MAIN STREAMLIT APP --------
 def main():
@@ -73,12 +68,11 @@ def main():
             st.session_state.embeddings = embed_text(st.session_state.chunks)
             st.success("✅ PDF processed successfully! Ask your questions below.")
 
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Display history
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    # Chat input box
     user_query = st.chat_input("Ask something about your PDF...")
 
     if user_query:
@@ -88,34 +82,32 @@ def main():
 
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-
                 if st.session_state.chunks is None:
                     reply = "⚠️ Please upload a PDF first."
                 else:
-                    context = retrieve_best_chunk(
-                        user_query,
-                        st.session_state.chunks,
-                        st.session_state.embeddings
-                    )
+                    context = retrieve_best_chunk(user_query, st.session_state.chunks, st.session_state.embeddings)
 
-                    model = genai.GenerativeModel("models/gemini-1.5-flash")
+                    model = genai.GenerativeModel("gemini-1.5-flash")  # ✅ Correct model
 
                     prompt = f"""
-You are an expert teacher. Use ONLY the following PDF content to answer.
-Provide a clear, structured, step-by-step explanation with real-world examples.
+You are an expert teacher. Answer ONLY using the PDF content.
 
-PDF CONTENT:
+PDF EXCERPT:
 {context}
 
 QUESTION:
 {user_query}
-"""
 
+Write a highly structured, clear explanation. Include:
+- bullet points
+- real life examples
+- analogies
+- simple language
+"""
                     reply = model.generate_content(prompt).text
 
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.markdown(reply)
-
 
 if __name__ == "__main__":
     main()
